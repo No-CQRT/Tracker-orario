@@ -1,0 +1,157 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tracker Orario</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .editable:hover { cursor: pointer; background-color: #f0f0f0; }
+    .icon { margin-left: 5px; cursor: pointer; }
+  </style>
+</head>
+<body class="bg-light p-3">
+
+  <div class="container">
+    <h2 class="mb-4">Tracker Orario</h2>
+    <table class="table table-bordered text-center">
+      <thead>
+        <tr>
+          <th>Evento</th>
+          <th>Orario</th>
+        </tr>
+      </thead>
+      <tbody id="timeTable">
+        <tr><td>Ingresso</td><td class="editable" data-key="ingresso">--:-- <span class="icon">✏️</span></td></tr>
+        <tr><td>Uscita Pausa</td><td class="editable" data-key="uscitaPausa">--:-- <span class="icon">✏️</span></td></tr>
+        <tr><td>Rientro Pausa</td><td class="editable" data-key="rientroPausa">--:-- <span class="icon">✏️</span></td></tr>
+        <tr><td>Uscita</td><td class="editable" data-key="uscita">--:-- <span class="icon">✏️</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="mb-3">
+      <strong>Ore lavorate:</strong> <span id="workedHours">--</span><br>
+      <strong>Uscita stimata:</strong> <span id="estimatedExit">--</span>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-success" id="btnIngresso">Ingresso</button>
+      <button class="btn btn-danger" id="btnUscita">Uscita</button>
+      <button class="btn btn-warning" id="btnReset">Reset</button>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="resetModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Conferma Reset</h5></div>
+        <div class="modal-body">Vuoi resettare tutti i valori?</div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+          <button class="btn btn-danger" id="confirmReset">Sì</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const fields = ["ingresso", "uscitaPausa", "rientroPausa", "uscita"];
+    let lastAction = null;
+
+    function loadTimes() {
+      fields.forEach(key => {
+        const val = localStorage.getItem(key) || "--:--";
+        document.querySelector(`[data-key="${key}"]`).innerHTML = val + ' <span class="icon">✏️</span>';
+      });
+      updateCalculations();
+    }
+
+    function saveTime(key, time) {
+      localStorage.setItem(key, time);
+      loadTimes();
+    }
+
+    function getTime(key) {
+      const val = localStorage.getItem(key);
+      return val && val !== "--:--" ? parseTime(val) : null;
+    }
+
+    function parseTime(str) {
+      const [h, m] = str.split(":").map(Number);
+      return new Date(0, 0, 0, h, m);
+    }
+
+    function formatTime(date) {
+      return date.toTimeString().slice(0, 5);
+    }
+
+    function updateCalculations() {
+      const inTime = getTime("ingresso");
+      const outPause = getTime("uscitaPausa");
+      const inPause = getTime("rientroPausa");
+      const outTime = getTime("uscita");
+
+      let worked = 0;
+      if (inTime && outPause) worked += (outPause - inTime) / 3600000;
+      if (inPause && outTime) worked += (outTime - inPause) / 3600000;
+
+      document.getElementById("workedHours").textContent = worked.toFixed(2);
+
+      if (inPause && worked < 8) {
+        const remaining = 8 - worked;
+        const estimatedExit = new Date(inPause.getTime() + remaining * 3600000);
+        document.getElementById("estimatedExit").textContent = formatTime(estimatedExit);
+      } else {
+        document.getElementById("estimatedExit").textContent = "--";
+      }
+    }
+
+    document.getElementById("btnIngresso").addEventListener("click", () => {
+      if (lastAction === "ingresso") return;
+      const now = formatTime(new Date());
+      const nextField = fields.find(f => !localStorage.getItem(f) || localStorage.getItem(f) === "--:--");
+      if (nextField) {
+        saveTime(nextField, now);
+        lastAction = "ingresso";
+      }
+    });
+
+    document.getElementById("btnUscita").addEventListener("click", () => {
+      if (lastAction === "uscita") return;
+      const now = formatTime(new Date());
+      const nextField = fields.find(f => !localStorage.getItem(f) || localStorage.getItem(f) === "--:--");
+      if (nextField) {
+        saveTime(nextField, now);
+        lastAction = "uscita";
+      }
+    });
+
+    document.getElementById("btnReset").addEventListener("click", () => {
+      new bootstrap.Modal(document.getElementById("resetModal")).show();
+    });
+
+    document.getElementById("confirmReset").addEventListener("click", () => {
+      fields.forEach(f => localStorage.removeItem(f));
+      lastAction = null;
+      loadTimes();
+      bootstrap.Modal.getInstance(document.getElementById("resetModal")).hide();
+    });
+
+    document.querySelectorAll(".editable").forEach(cell => {
+      cell.addEventListener("click", () => {
+        const key = cell.dataset.key;
+        const current = localStorage.getItem(key) || "";
+        const newVal = prompt("Modifica orario (HH:MM)", current);
+        if (newVal && /^\d{1,2}:\d{2}$/.test(newVal)) {
+          saveTime(key, newVal);
+        }
+      });
+    });
+
+    loadTimes();
+  </script>
+</body>
+</html>
